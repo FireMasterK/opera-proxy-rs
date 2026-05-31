@@ -26,7 +26,7 @@ pub enum ProxyError {
     #[error("form error: {0}")]
     Form(#[from] serde_urlencoded::ser::Error),
     #[error("request failed: {0}")]
-    Reqwest(#[from] reqwest::Error),
+    Wreq(#[from] wreq::Error),
     #[error("upstream proxy rejected CONNECT with status {0}")]
     UpstreamConnect(u16),
     #[error("upstream pool is empty")]

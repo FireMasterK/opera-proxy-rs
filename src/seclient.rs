@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use base64::Engine as _;
 use digest_auth::{AuthContext, HttpMethod, WwwAuthenticateHeader};
-use reqwest::cookie::Jar;
-use reqwest::header::{
-    ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT, WWW_AUTHENTICATE,
-};
-use reqwest::{Client, RequestBuilder};
 use serde::Deserialize;
+use wreq::header::{
+    ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, WWW_AUTHENTICATE,
+};
+use wreq::redirect::Policy;
+use wreq::{Client, RequestBuilder};
+use wreq_util::Emulation;
 use sha1::{Digest, Sha1};
 use tokio::sync::Mutex;
 use tracing::debug;
@@ -115,22 +116,31 @@ impl State {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SEClient {
     http_client: Client,
     settings: SESettings,
     state: Arc<Mutex<State>>,
 }
 
+impl std::fmt::Debug for SEClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SEClient")
+            .field("settings", &self.settings)
+            .finish_non_exhaustive()
+    }
+}
+
 impl SEClient {
     pub fn new(config: &Config) -> Result<Self, ProxyError> {
         let settings = SESettings::default();
         let device_id = random_capital_hex_string(DEVICE_ID_BYTES)?;
-        let jar = Arc::new(Jar::default());
 
         let http_client = Client::builder()
-            .cookie_provider(jar)
+            .emulation(Emulation::Opera130)
             .timeout(config.timeout)
+            .cookie_store(true)
+            .redirect(Policy::none())
             .build()?;
 
         Ok(Self {
@@ -309,11 +319,6 @@ impl SEClient {
             HeaderValue::from_str(&self.settings.operating_system)
                 .map_err(|err| ProxyError::message(err.to_string()))?,
         );
-        headers.insert(
-            USER_AGENT,
-            HeaderValue::from_str(&self.settings.user_agent)
-                .map_err(|err| ProxyError::message(err.to_string()))?,
-        );
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
         headers.insert(
             CONTENT_TYPE,
@@ -339,7 +344,7 @@ impl SEClient {
         Ok(response.json::<T>().await?)
     }
 
-    async fn send(&self, request: RequestBuilder) -> Result<reqwest::Response, ProxyError> {
+    async fn send(&self, request: RequestBuilder) -> Result<wreq::Response, ProxyError> {
         let response = request.send().await?;
         debug!("SurfEasy response status={}", response.status());
         Ok(response)
@@ -351,14 +356,14 @@ impl SEClient {
         username: &str,
         password: &str,
         endpoint: &str,
-    ) -> Result<reqwest::Response, ProxyError> {
+    ) -> Result<wreq::Response, ProxyError> {
         let first = request
             .try_clone()
             .ok_or_else(|| ProxyError::message("unable to clone request for digest auth"))?
             .send()
             .await?;
 
-        if first.status() != reqwest::StatusCode::UNAUTHORIZED {
+        if first.status() != wreq::StatusCode::UNAUTHORIZED {
             return Ok(first);
         }
 
