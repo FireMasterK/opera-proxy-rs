@@ -10,6 +10,10 @@
   "platformAutomerge": true,
   "packageRules": [
     {
+      "groupName": "wreq packages",
+      "matchPackageNames": ["wreq", "wreq-util"]
+    },
+    {
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
       "automerge": true
     }
