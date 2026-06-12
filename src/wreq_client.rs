@@ -22,7 +22,7 @@ impl UpstreamWreqClient {
             .timeout(timeout)
             .redirect(Policy::none())
             .tls_sni(false)
-            .verify_hostname(false)
+            .tls_verify_hostname(false)
             .build()
             .map_err(|err| ProxyError::message(err.to_string()))?;
         Ok(Self { base, fake_sni })
@@ -111,10 +111,8 @@ impl UpstreamWreqClient {
 }
 
 fn proxy_authorization(credentials: &Credentials) -> Result<wreq::header::HeaderValue, ProxyError> {
-    let token = base64::engine::general_purpose::STANDARD.encode(format!(
-        "{}:{}",
-        credentials.login, credentials.password
-    ));
+    let token = base64::engine::general_purpose::STANDARD
+        .encode(format!("{}:{}", credentials.login, credentials.password));
     wreq::header::HeaderValue::from_str(&format!("Basic {token}"))
         .map_err(|err| ProxyError::message(err.to_string()))
 }
